@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "launchId": "fd77b4ce-b76e-4151-a73f-9b66fd613b7d",
+  "chainId": 11155111,
+  "sourceCommit": "9e20f4940185239936926e9ef213b3b738a3af36",
+  "attestationHash": "08df5cf80f7e22693a004bc35c65bef19042a7d1ce403d90b1e76dfc5628a51b",
+  "contracts": [
+    {
+      "name": "RaffleToken",
+      "address": "0xeb86b6e8bc2b73726f26f7a4da58ada9909b9512",
+      "abiHash": "bcfa4c73a2327123497417a680a2f3be5f2e6598a8bc3063d3438fbd9cb10c0c",
+      "abiPath": "abi/RaffleToken.json"
+    },
+    {
+      "name": "CommitRevealRaffle",
+      "address": "0xf5cff7ba256a3fede1930c623aefe0ae10f4453f",
+      "abiHash": "f9b695704ea844f8dede6e4d8e597916bee1fce884f83b22b0a6e846dbf48336",
+      "abiPath": "abi/CommitRevealRaffle.json"
+    }
+  ]
+}
