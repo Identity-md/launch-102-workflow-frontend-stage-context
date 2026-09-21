@@ -9,9 +9,9 @@ pragma solidity 0.8.26;
 ///     (`salesEnd = start + SALES_DURATION`). Each ticket costs exactly `TICKET_PRICE` and carries
 ///     `commitment = keccak256(abi.encodePacked(secret))`. Commitments are unique within a round.
 ///  2. Reveal window: `salesEnd <= now < revealEnd` (`revealEnd = salesEnd + REVEAL_DURATION`). Only
-///     the ticket's buyer may reveal it. Revealed secrets are XOR-accumulated (order independent).
+///     the ticket's buyer may reveal it. Secrets are stored per ticket.
 ///  3. From `revealEnd` anyone may `settle`. The winning index is
-///     `uint256(keccak256(abi.encodePacked(xorOfRevealedSecrets))) % ticketsSold`; a ticket that was
+///     `uint256(keccak256(abi.encodePacked(revealedSecrets))) % ticketsSold`, secrets concatenated in ticket order; a ticket that was
 ///     not revealed forfeits eligibility, so the index moves forward (wrapping) to the next revealed
 ///     ticket. If nobody revealed, the whole pot rolls over into the next round.
 ///  4. The buyer of the winning ticket calls `claim` to receive the full pot. There is no deadline.
@@ -60,6 +60,8 @@ contract CommitRevealRaffle {
     mapping(uint256 roundId => mapping(uint256 index => Ticket)) private _tickets;
     mapping(uint256 roundId => mapping(bytes32 commitment => bool)) public commitmentUsed;
     mapping(uint256 roundId => mapping(address buyer => uint256[])) private _ticketsOf;
+
+    mapping(uint256 roundId => mapping(uint256 index => bytes32)) private _secrets;
 
     uint256 private _lock = 1;
 
@@ -152,7 +154,7 @@ contract CommitRevealRaffle {
 
         t.revealed = true;
         r.revealedCount += 1;
-        r.entropy ^= secret;
+        _secrets[roundId][ticketIndex] = secret;
         emit SecretRevealed(roundId, ticketIndex, msg.sender, secret);
     }
 
@@ -178,7 +180,20 @@ contract CommitRevealRaffle {
         }
 
         uint256 sold = r.ticketsSold;
-        uint256 index = uint256(keccak256(abi.encodePacked(r.entropy))) % sold;
+        bytes memory all = new bytes(uint256(r.revealedCount) * 32);
+        uint256 offset;
+        for (uint256 i = 0; i < sold; i++) {
+            if (_tickets[roundId][i].revealed) {
+                bytes32 secret = _secrets[roundId][i];
+                assembly ("memory-safe") {
+                    mstore(add(add(all, 32), offset), secret)
+                }
+                offset += 32;
+            }
+        }
+        bytes32 entropy = keccak256(all);
+        r.entropy = entropy;
+        uint256 index = uint256(entropy) % sold;
         // Terminates: at least one ticket is revealed.
         while (!_tickets[roundId][index].revealed) {
             index = index + 1 == sold ? 0 : index + 1;

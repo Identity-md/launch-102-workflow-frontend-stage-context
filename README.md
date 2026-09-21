@@ -60,12 +60,11 @@ Rounds are numbered from 1. `currentRoundId` is the only round that accepts tick
    Commitments must be non-zero and unique within a round, which stops someone copying a commitment and
    later replaying its revealed secret.
 2. **Reveal.** While `salesEnd <= block.timestamp < revealEnd`, the ticket's buyer (only that address)
-   calls `reveal(roundId, ticketIndex, secret)`. Revealed secrets are XOR-ed into `entropy`, so the
-   order of reveals does not matter.
+   calls `reveal(roundId, ticketIndex, secret)`. Each revealed secret is stored per ticket.
 3. **Settle.** From `block.timestamp >= revealEnd`, anyone calls `settle(roundId)`. That opens round
    `roundId + 1`.
-   - Winning index: `uint256(keccak256(abi.encodePacked(entropy))) % ticketsSold`, where `entropy` is
-     the XOR of all revealed secrets. A ticket that was not revealed is not eligible. If the index points
+   - Winning index: `uint256(entropy) % ticketsSold`, where `entropy` is the keccak256 of all revealed
+     secrets concatenated in ticket order (stored in the round at settlement). A ticket that was not revealed is not eligible. If the index points
      to one, the index moves forward, wrapping to 0, until it reaches a revealed ticket.
    - If nobody revealed, there is no winner. The whole pot rolls into the next round's pot
      (`PotRolledOver`).
@@ -86,7 +85,7 @@ A buyer cannot get a refund. That is on purpose: refunds would let non-revealers
 
 - **Commit-reveal is not unbiased randomness.** The last revealer(s) can compute the outcome with and
   without their reveal and choose to withhold, forfeiting that ticket. Holding k tickets gives up to
-  2^k choices. XOR makes the order of reveals irrelevant, so ordering adds no further choices. Nobody
+  2^k choices. Secrets are hashed in ticket order, so reveal order adds no further choices. Nobody
   can change a secret after committing. Tickets bought late do not help, because all commitments are
   fixed before any secret is public. This mechanism is what the approved design asks for. It is not
   VRF-grade randomness.

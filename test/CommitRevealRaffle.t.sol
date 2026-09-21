@@ -70,7 +70,7 @@ contract CommitRevealRaffleTest is Test {
     /// @dev Independent reimplementation of the winner rule.
     function _expectedWinner(uint256 roundId, bytes32 entropy) internal view returns (uint256 idx) {
         uint256 sold = raffle.getRound(roundId).ticketsSold;
-        idx = uint256(keccak256(abi.encodePacked(entropy))) % sold;
+        idx = uint256(entropy) % sold;
         for (uint256 n; n < sold; ++n) {
             if (raffle.getTicket(roundId, idx).revealed) return idx;
             idx = (idx + 1) % sold;
@@ -237,7 +237,7 @@ contract CommitRevealRaffleTest is Test {
         _reveal(alice, 1, idx, "a");
         CommitRevealRaffle.Round memory r = raffle.getRound(1);
         assertEq(r.revealedCount, 1);
-        assertEq(r.entropy, bytes32("a"));
+        assertEq(r.entropy, bytes32(0)); // set at settlement
         assertTrue(raffle.getTicket(1, idx).revealed);
     }
 
@@ -338,11 +338,10 @@ contract CommitRevealRaffleTest is Test {
         _reveal(alice, 1, a, "alpha");
         _reveal(bob, 1, b, "bravo");
         _reveal(carol, 1, c, "charlie");
-        bytes32 entropy = bytes32("alpha") ^ bytes32("bravo") ^ bytes32("charlie");
-        assertEq(raffle.getRound(1).entropy, entropy);
+        bytes32 entropy = keccak256(abi.encodePacked(bytes32("alpha"), bytes32("bravo"), bytes32("charlie")));
         _toSettle(1);
 
-        uint256 expected = uint256(keccak256(abi.encodePacked(entropy))) % 3;
+        uint256 expected = uint256(entropy) % 3;
         address expectedWinner = raffle.getTicket(1, expected).buyer;
         vm.expectEmit(true, true, false, true);
         emit RoundSettled(1, expectedWinner, expected, 3 * PRICE);
@@ -359,7 +358,21 @@ contract CommitRevealRaffleTest is Test {
         _toReveal(1);
         _reveal(bob, 1, b, "bravo");
         _reveal(alice, 1, a, "alpha");
-        assertEq(raffle.getRound(1).entropy, bytes32("alpha") ^ bytes32("bravo"));
+        _toSettle(1);
+        raffle.settle(1);
+        assertEq(raffle.getRound(1).entropy, keccak256(abi.encodePacked(bytes32("alpha"), bytes32("bravo"))));
+    }
+
+    /// @dev Reviewer scenario: secrets 1 and 2 hash (in ticket order) to an even index -> Alice, not XOR's Bob.
+    function test_winnerIsKeccakOfAllSecretsNotXor() public {
+        uint256 a = _buy(alice, bytes32(uint256(1)));
+        uint256 b = _buy(bob, bytes32(uint256(2)));
+        _toReveal(1);
+        _reveal(bob, 1, b, bytes32(uint256(2)));
+        _reveal(alice, 1, a, bytes32(uint256(1)));
+        _toSettle(1);
+        raffle.settle(1);
+        assertEq(raffle.getRound(1).winner, alice);
     }
 
     /// @dev Searches for secrets whose raw index lands on a non-revealer, and checks forfeiture.
@@ -369,7 +382,7 @@ contract CommitRevealRaffleTest is Test {
         bytes32 sb = "bob";
         for (uint256 i = 1;; ++i) {
             sa = bytes32(i);
-            if (uint256(keccak256(abi.encodePacked(sa ^ sb))) % 3 == 1) break;
+            if (uint256(keccak256(abi.encodePacked(sa, sb))) % 3 == 1) break;
         }
         uint256 a = _buy(alice, sa);
         _buy(mallory, "mallory");
@@ -529,11 +542,11 @@ contract CommitRevealRaffleTest is Test {
         assertEq(token.balanceOf(address(raffle)), uint256(nTickets) * PRICE);
 
         _toReveal(1);
-        bytes32 entropy;
+        bytes memory packed;
         for (uint256 i; i < nTickets; ++i) {
             if ((revealMask >> i) & 1 == 1) {
                 _reveal(users[i % 4], 1, i, secrets[i]);
-                entropy ^= secrets[i];
+                packed = abi.encodePacked(packed, secrets[i]);
             }
         }
         _toSettle(1);
@@ -544,7 +557,7 @@ contract CommitRevealRaffleTest is Test {
             assertEq(r.winner, address(0));
             assertEq(raffle.getRound(2).pot, uint256(nTickets) * PRICE);
         } else {
-            uint256 expected = _expectedWinner(1, entropy);
+            uint256 expected = _expectedWinner(1, keccak256(packed));
             assertEq(r.winningTicket, expected);
             assertTrue(raffle.getTicket(1, r.winningTicket).revealed);
             vm.prank(r.winner);
