@@ -1,0 +1,24 @@
+{
+  "kind": "evm_project",
+  "token": {
+    "contract": "RaffleToken",
+    "name": "Raffle",
+    "symbol": "RAFL",
+    "decimals": 18
+  },
+  "contracts": [
+    {
+      "contract": "CommitRevealRaffle",
+      "constructorArgs": [
+        "$token"
+      ]
+    }
+  ],
+  "pool": {
+    "pairedCurrency": "0x0000000000000000000000000000000000000000",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336"
+  },
+  "notes": "Deploy RaffleToken first, then CommitRevealRaffle with the deployed token address. The pool pairs RAFL with native ETH and has no hook. CommitRevealRaffle has no owner, admin, fee, initialization call, pause, or upgrade path. Each ticket costs 100 RAFL. Sales and reveal windows each last one day. Commit-reveal randomness permits strategic withholding by a revealer; unrevealed tickets are ineligible, and a round with no reveals rolls its pot into the next round. The winner has no claim deadline."
+}
